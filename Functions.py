@@ -12,7 +12,6 @@ import scipy
 # from scipy.cluster.hierarchy import dendrogram , linkage
 import matplotlib.pyplot as plt
 import seaborn as sns
-#import pdb
 import time
 import multiprocessing as mp
 import pickle
@@ -22,21 +21,25 @@ from fractions import Fraction
 
 # from gurobipy import GRB, quicksum , Model
 
-df=pd.read_pickle('S&P 500 time series.pkl')
-df = df.sample(100, random_state=0 , axis=1)
-R=np.zeros(shape=(df.shape[0]-1,df.shape[1]))
-df_values=df.values
+# df=pd.read_pickle('S&P 500 time series.pkl')
+# df = df.sample(100, random_state=0 , axis=1)
+# R=np.zeros(shape=(df.shape[0]-1,df.shape[1]))
+# df_values=df.values
 
-for i in np.arange(df.shape[1]):
-    for t in np.arange(1,df.shape[0]):
-        R[t-1,i]=np.log(df_values[t,i]/df_values[t-1,i])
+# for i in np.arange(df.shape[1]):
+#     for t in np.arange(1,df.shape[0]):
+#         R[t-1,i]=np.log(df_values[t,i]/df_values[t-1,i])
 
-pr=np.corrcoef(R.T)
-dis=np.sqrt(2*(1-pr))
-np.fill_diagonal(dis , 0)
+# pr=np.corrcoef(R.T)
+# dis=np.sqrt(2*(1-pr))
+# np.fill_diagonal(dis , 0)
 
 
-def random_binary_tree(nol): #nol: number of leaves
+def random_binary_tree(nol , random_state='None'): #nol: number of leaves
+    if random_state!='None':
+        random.seed(random_state)
+    else:
+        random.seed()
     edges = [(0,1)]
     leaves=[0,1]
     while len(edges) < 2 * nol - 3:
@@ -54,16 +57,17 @@ def random_binary_tree(nol): #nol: number of leaves
             
 def NNI(tree,edge,nol):
     v_i , v_j = edge[0] , edge[1]
+    edge_list = list(tree.edges())
     if (v_i < nol or v_j < nol):
         raise ValueError("Not a leaf edge")
     else:
         n_i = [i for i in tree.neighbors(v_i) if i!=v_j]
         n_j = [i for i in tree.neighbors(v_j) if i!=v_i]
-    edge_set_1 = [i for i in tree.edges()]+[(v_i,n_j[0]),(v_j,n_i[1])]
-    edge_set_1=[e for e in edge_set_1 if e not in [(v_i,n_i[1]),(v_j,n_j[0])]]
-    edge_set_2 = [i for i in tree.edges()]+[(v_i,n_j[1]),(v_j,n_i[1])]
-    edge_set_2=[e for e in edge_set_2 if e not in [(v_i,n_i[1]),(v_j,n_j[1])]]    
-    return edge_set_1,edge_set_2
+    edge_list_1 = [i for i in edge_list]+[(v_i,n_j[0]),(v_j,n_i[1])]
+    edge_list_1=[e for e in edge_list_1 if e not in [(v_i,n_i[1]),(v_j,n_j[0])]]
+    edge_list_2 = [i for i in edge_list]+[(v_i,n_j[1]),(v_j,n_i[1])]
+    edge_list_2=[e for e in edge_list_2 if e not in [(v_i,n_i[1]),(v_j,n_j[1])]]    
+    return ( edge_list_1 , edge_list_2 )
    
 def lambda_edgeweight (tree,edge,nol):
     v_i , v_j = edge[0] , edge[1]
@@ -85,7 +89,7 @@ def lambda_edgeweight (tree,edge,nol):
 
 
 def average_distance (leave_set_1,leave_set_2,dis_matrix):
-    dis_matrix_filtered = dis[np.ix_(leave_set_1,leave_set_2)]
+    dis_matrix_filtered = dis_matrix[np.ix_(leave_set_1,leave_set_2)]
     return np.sum(dis_matrix_filtered)/(len(leave_set_1)*len(leave_set_2))
     
 
@@ -114,7 +118,134 @@ def find_edgeweight (tree,edge,nol,dis_matrix):
                               average_distance(leaves_B,[v_i],dis_matrix) -
                               average_distance(leaves_A,leaves_B,dis_matrix) ) )
     
-       
+def find_edgeweight_2(tree,tree_temp,picked_edge,nol,dis): #Finds all edges weights after NNI
+    for (i,j) in tree_temp.edges():
+            if (i == picked_edge[0] or i == picked_edge[1] or
+                            j == picked_edge[0] or j == picked_edge[1] ):
+                tree_temp[i][j]['weight'] = find_edgeweight (tree_temp,(i,j),nol,dis)
+            else:
+                tree_temp[i][j]['weight'] = tree[i][j]['weight']
+    return tree_temp
+
+def find_edgeweight_3(tree,edge,nol,dis): #Finds only the 5 edges weights after NNI
+    edges=neighbor_edges(tree, edge) +[edge]
+    edge_weights={e:find_edgeweight (tree,e,nol,dis) for e in edges }
+    return edge_weights
+
+
+
+def neighbor_edges(tree,edge):
+        i,j = edge[0] , edge[1]
+        l_1 = [(k,i) for k in tree.neighbors(i) if k != j]
+        l_2 = [(j,k) for k in tree.neighbors(j) if k != i]
+        return  l_1 + l_2
+
+
+def all_tree_path_lengths(tree,nol):
+    dis_hat = {}
+    root_paths={}
+    for i in range(1,nol):
+        root_paths[i]=path_edges(tree,0,i)
+        dis_hat[0,i] = sum(tree[e[0]][e[1]]['weight'] for e in root_paths[i])          
+    # breakpoint()
+    for i in range(1,nol-1):
+        for j in range(i+1,nol): 
+            common_path=[]
+            minimum = min(len(root_paths[i]) , len(root_paths[j]))
+            for k in range(minimum):
+                if (root_paths[i][k] == root_paths[j][k]):
+                    common_path.append(root_paths[i][k])
+                else:
+                    break
+            dis_hat[i,j] = dis_hat[0,i] + dis_hat[0,j] - 2 * (
+                sum(tree[e[0]][e[1]]['weight'] for e in common_path))
+    return dis_hat
+            
+
+def tree_path_lengths(tree,path,nol):
+    i , j = min(path[0],path[1]) , max(path[0],path[1])
+    dis_hat = {}
+    root_paths={}
+    for i in range(1,nol):
+        root_paths[i]=path_edges(tree,0,i)
+        dis_hat[0,i] = sum(tree[e[0]][e[1]]['weight'] for e in root_paths[i])          
+    # breakpoint()
+    for i in range(1,nol-1):
+        for j in range(i+1,nol): 
+            common_path=[]
+            minimum = min(len(root_paths[i]) , len(root_paths[j]))
+            for k in range(minimum):
+                if (root_paths[i][k] == root_paths[j][k]):
+                    common_path.append(root_paths[i][k])
+                else:
+                    break
+            dis_hat[i,j] = dis_hat[0,i] + dis_hat[0,j] - 2 * (
+                sum(tree[e[0]][e[1]]['weight'] for e in common_path))
+    return dis_hat
+
+               
+
+def path_edges(tree,root,leaf):
+    predecessors = nx.dfs_predecessors(tree,root)
+    parent = predecessors[leaf]
+    child=leaf
+    path_edge_list=[(parent,child)]
+    while parent!=root:
+        temp=predecessors[parent]
+        child=parent
+        parent=temp
+        path_edge_list = [(parent,child)] + path_edge_list
+    return path_edge_list
+
+
+
+
+
+def local_min_opt(tree,nol,dis):
+    # breakpoint()
+    negative_edges={(i,j):k for i,j,k in tree.edges(data='weight') if k<0}
+    # sum_neg=sum(negative_edges.values())
+    flag=0
+    count=0
+    while flag==0:
+        count +=1
+        flag=1
+        for e in negative_edges:
+            NNI_info = NNI(tree,e,nol)
+            edges_5 = {(i,j):tree[i][j]['weight'] for i,j in neighbor_edges(tree,e) +[e]}
+            sum_neg_5 = sum(i for i in edges_5.values() if i<0)
+            for NNI_index in range(2):
+                tree_temp = nx.Graph(NNI_info[NNI_index])
+                edges_5_temp=find_edgeweight_3(tree_temp,e,nol,dis) 
+                # breakpoint()
+                sum_neg_5_temp = sum(i for i in edges_5_temp.values() if i<0)
+                edges_5_temp.update({(e[1],e[0]):k for e,k in edges_5_temp.items()})
+                # sum_neg_5 = sum([k for i,j,k in tree.edges(data='weight') if k<0])
+                if sum_neg_5_temp > sum_neg_5:
+                    for i,j in tree_temp.edges():
+                        tree_temp[i][j]['weight'] = edges_5_temp[i,j] if (i,j) in edges_5_temp else tree[i][j]['weight']
+                        # sum_neg=sum(negative_edges.values())
+                    # breakpoint()
+                    tree=tree_temp.copy()
+                    flag=0
+                    break
+            # breakpoint()
+            if flag==0:
+                negative_edges={(i,j):k for i,j,k in tree.edges(data='weight') if k<0}
+                # sum_neg=sum(negative_edges.values())
+                break
+    # breakpoint()
+    return tree 
+
+
+def negative_edges(tree):
+    return {(i,j):k for i,j,k in tree.edges(data='weight') if k<0}
+
+
+def RSS(tree,nol,dis):
+    dis_hat = all_tree_path_lengths(tree , nol)
+    return sum( (dis_hat[i,j]-dis[i,j])**2 for i,j in dis_hat )
+
 
 def edge_path_func(tree):
     # breakpoint()
@@ -131,6 +262,7 @@ def edge_path_func(tree):
                 edge_path.loc[[(i,j)],[edge]]=1
     edge_path=edge_path.fillna(0)
     return edge_path 
+
 
 
 
