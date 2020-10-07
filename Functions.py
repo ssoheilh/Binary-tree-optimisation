@@ -201,7 +201,7 @@ def path_edges(tree,root,leaf):
 
 
 
-def local_min_opt(tree,nol,dis):
+def neg_NNI(tree,nol,dis):
     # breakpoint()
     negative_edges={(i,j):k for i,j,k in tree.edges(data='weight') if k<0}
     # sum_neg=sum(negative_edges.values())
@@ -238,13 +238,92 @@ def local_min_opt(tree,nol,dis):
     return tree 
 
 
+
+def zero_sub(tree,nol,dis):
+    # breakpoint()
+    A , b , edge_indices = normal_eq(tree , nol , dis).values()
+    w = {(i,j):tree[i][j]['weight'] for i,j in edge_indices.keys()}
+    negative_edges={(i,j):k for (i,j),k in w.items() if k<0 }
+    sum_neg=sum(negative_edges.values())
+    flag=0
+    count=0
+    irows , icols = np.indices(( 2*nol-3 , 2*nol-3 ))
+    while flag==0:
+        count +=1
+        flag=1
+        # breakpoint()
+        for (i,j) in negative_edges:
+            w[i,j]  = 0
+            mask = (irows!=edge_indices[i,j])&(icols!=edge_indices[i,j])
+            A_temp = A[mask].reshape(len(irows)-1 , len(icols)-1)
+            b_temp = b[np.arange(2*nol-3) != edge_indices[i,j]]
+            w_temp = scipy.linalg.cho_solve(scipy.linalg.cho_factor(
+                    A_temp , check_finite=False) ,b_temp , check_finite=False) 
+            sum_neg_temp = sum(w_temp[w_temp<0])
+            if sum_neg_temp > sum_neg:
+                flag = 0 
+                w = {i:j for i,j in zip(edge_indices.keys(),np.insert(w_temp, edge_indices[i,j] , 0))}
+                negative_edges={(i,j):k for (i,j),k in w.items() if k<0 }
+                sum_neg = sum_neg_temp
+                break
+    tree_out = nx.Graph()
+    tree_out.add_weighted_edges_from([(i,j,k) for (i,j),k in w.items()])
+    return tree_out
+  
+
+
+def normal_eq(tree,nol,dis): #Build the matrix and vector for normal equations
+    tree_directed = nx.dfs_tree(tree , 0)
+    leaves = set(np.arange(nol))
+    edge_indices = {i:j for i,j in zip(tree_directed.edges() , np.arange(2*nol-3))}
+    A = np.zeros((2*nol-3 , 2*nol-3))
+    b = np.zeros((2*nol-3))
+    
+    # for i,j in list(edge_indices.keys()):
+    #     edge_indices[j,i]=edge_indices[i,j]
+    
+    for i,j in it.combinations_with_replacement(tree_directed.edges(),2):
+        if i==j:
+            temp_1 = {v for v in list(nx.descendants(tree_directed,i[1]))+[i[1]] if v < nol}
+            temp_2=leaves-temp_1
+            A[edge_indices[i],edge_indices[j]]= len(temp_1) * len(temp_2)
+            b[edge_indices[i]]=sum(dis[s][t] for s in temp_1 for t in temp_2)
+        if i!=j:
+            temp_1 = {v for v in list(nx.descendants(tree_directed,i[1]))+[i[1]] if v < nol}
+            temp_2 = {v for v in list(nx.descendants(tree_directed,j[1]))+[j[1]] if v < nol}
+            if temp_1.intersection(temp_2) == set():
+                A[edge_indices[i],edge_indices[j]]= len(temp_1) * len(temp_2)
+            elif len(temp_1) > len(temp_2):
+                A[edge_indices[i],edge_indices[j]]= (len(leaves)-len(temp_1)) * len(temp_2)
+            elif len(temp_1) < len(temp_2): 
+                A[edge_indices[i],edge_indices[j]]= len(temp_1) * (len(leaves)-len(temp_2))
+    
+    A=np.maximum(A,A.T)
+    return {'A' : A  , 'b':b , 'Edge_indices': edge_indices }
+
+
+
 def negative_edges(tree):
     return {(i,j):k for i,j,k in tree.edges(data='weight') if k<0}
+
+def zero_edges(tree):
+    return {(i,j):k for i,j,k in tree.edges(data='weight') if k==0}
 
 
 def RSS(tree,nol,dis):
     dis_hat = all_tree_path_lengths(tree , nol)
     return sum( (dis_hat[i,j]-dis[i,j])**2 for i,j in dis_hat )
+
+def zero_replacement(tree):
+    tree_out=nx.Graph()
+    tree_out.add_edges_from(tree.edges())
+    for i,j,k in tree.edges(data='weight'):
+        if k>0:
+            tree_out[i][j]['weight']=tree[i][j]['weight']
+        else:
+            tree_out[i][j]['weight']=0
+    return tree_out
+    
 
 
 def edge_path_func(tree):

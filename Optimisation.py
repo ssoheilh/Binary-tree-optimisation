@@ -3,7 +3,7 @@ from Functions import *
 
 
 df=pd.read_pickle('S&P 500 time series.pkl')
-df = df.sample(40, random_state=0 , axis=1)
+df = df.sample(80, random_state=0 , axis=1)
 R=np.zeros(shape=(df.shape[0]-1,df.shape[1]))
 df_values=df.values
 
