@@ -249,7 +249,6 @@ def zero_sub(tree,nol,dis):
     count=0
     irows , icols = np.indices(( 2*nol-3 , 2*nol-3 ))
     while flag==0:
-        count +=1
         flag=1
         # breakpoint()
         for (i,j) in negative_edges:
@@ -261,11 +260,13 @@ def zero_sub(tree,nol,dis):
                     A_temp , check_finite=False) ,b_temp , check_finite=False) 
             sum_neg_temp = sum(w_temp[w_temp<0])
             if sum_neg_temp > sum_neg:
+                count +=1
                 flag = 0 
                 w = {i:j for i,j in zip(edge_indices.keys(),np.insert(w_temp, edge_indices[i,j] , 0))}
                 negative_edges={(i,j):k for (i,j),k in w.items() if k<0 }
                 sum_neg = sum_neg_temp
                 break
+    # breakpoint()
     tree_out = nx.Graph()
     tree_out.add_weighted_edges_from([(i,j,k) for (i,j),k in w.items()])
     return tree_out
