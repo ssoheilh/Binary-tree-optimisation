@@ -1,11 +1,11 @@
 from Functions import *
 
 
-time_in_seconds = 4
-seed =3
+time_in_seconds = 12 * 60 *60
+seed = 1
 
 df=pd.read_pickle('S&P 500 time series.pkl')
-df = df.sample(30, random_state=seed , axis=1)
+df = df.sample(40, random_state=seed , axis=1)
 R=np.zeros(shape=(df.shape[0]-1,df.shape[1]))
 df_values=df.values
 
@@ -51,7 +51,7 @@ def ILS_seed(seed , time_in_seconds=time_in_seconds , nol=nol , df=df , dis=dis)
 
 
     harmonic_number = lambda n: sum(Fraction(1, d) for d in range(1, n+1)) 
-    local_min_stuck = float (2 * nol * harmonic_number( 2 * nol) ) #nol roughly equal to internal edges
+    local_min_stuck = float ( 2*nol * harmonic_number(  2 * nol) ) #nol roughly equal to internal edges
 
     time_passed = time_in_seconds
     t_end = time.time() + time_passed
