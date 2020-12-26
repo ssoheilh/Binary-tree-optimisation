@@ -1,11 +1,11 @@
 from Functions import *
 
 
-time_in_seconds = 12 * 60 *60
+time_in_seconds = 9 * 60 * 60
 seed = 1
 
 df=pd.read_pickle('S&P 500 time series.pkl')
-df = df.sample(40, random_state=seed , axis=1)
+df = df.sample(30, random_state=seed , axis=1)
 R=np.zeros(shape=(df.shape[0]-1,df.shape[1]))
 df_values=df.values
 
@@ -95,14 +95,21 @@ def ILS_seed(seed , time_in_seconds=time_in_seconds , nol=nol , df=df , dis=dis)
             else:
                 counter_jump += 1
                 if counter_jump > local_min_stuck :
-                    tree = random_binary_tree(nol)
-                    tree = nx.Graph(tree)
+                    tree = NNI_n(tree,nol, 2*nol)
+#                     tree = random_binary_tree(nol)
+#                     tree = nx.Graph(tree)
                     for i,j in tree.edges():
                         tree[i][j]['weight'] = find_edgeweight(tree,(i,j),nol,dis)
                     rss = RSS(tree,nol,dis)
                     counter_jump =0
+#                     tree = random_binary_tree(nol)
+#                     tree = nx.Graph(tree)
+#                     for i,j in tree.edges():
+#                         tree[i][j]['weight'] = find_edgeweight(tree,(i,j),nol,dis)
+#                     rss = RSS(tree,nol,dis)
+#                     counter_jump =0
                     
-    return rss_best
+    return rss_best , tree_best
 
 
 # ILS_seed(0,20)
@@ -113,9 +120,14 @@ results_ILS= pool.map(ILS_seed, [i for i in number_of_pools*[seed]])
 pool.close()
 
 
+results_RSS , results_graphs = [RSS for RSS , graph in results_ILS]  , [graph for RSS , graph in results_ILS]
+with open('Graphs_no_cons/Sample%d_%dmin_seed%d.pkl' %(nol, time_in_seconds//60  , seed ) , 'wb') as handle:
+    pickle.dump(results_graphs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 with open('RSS_results_no_cons/Final_Sample%d_%dmin_seed%d.txt' %(nol,time_in_seconds//60 , seed) , 'w') as file:
-    for i in range(len(results_ILS)):
-        file.write('%d: %f \n' %(i+1 , results_ILS[i]))
+    for i in range(len(results_RSS)):
+        file.write('%d: %f \n' %(i+1 , results_RSS[i]))
 
     
         

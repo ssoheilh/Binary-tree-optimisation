@@ -64,11 +64,21 @@ def NNI(tree,edge,nol):
         n_i = [i for i in tree.neighbors(v_i) if i!=v_j]
         n_j = [i for i in tree.neighbors(v_j) if i!=v_i]
     edge_list_1 = [i for i in edge_list]+[(v_i,n_j[0]),(v_j,n_i[1])]
-    edge_list_1=[e for e in edge_list_1 if e not in [(v_i,n_i[1]),(v_j,n_j[0])]]
+    edge_list_1=[e for e in edge_list_1 if e not in [(v_i,n_i[1]),(v_j,n_j[0]),(n_i[1],v_i),(n_j[0],v_j)]]
     edge_list_2 = [i for i in edge_list]+[(v_i,n_j[1]),(v_j,n_i[1])]
-    edge_list_2=[e for e in edge_list_2 if e not in [(v_i,n_i[1]),(v_j,n_j[1])]]    
+    edge_list_2=[e for e in edge_list_2 if e not in [(v_i,n_i[1]),(v_j,n_j[1]),(n_i[1],v_i),(n_j[1],v_j)]]    
     return ( edge_list_1 , edge_list_2 )
    
+def NNI_n(tree , nol , n):
+    for i in range(n):
+        internal_edges = [(i,j) for i,j in tree.edges() if i>=nol and j >=nol]
+        random_edge = random.choice(internal_edges)
+        candidate_edge_lists = NNI(tree, random_edge, nol)
+        tree = nx.Graph(random.choice(candidate_edge_lists))
+    return tree
+    
+    
+    
 def lambda_edgeweight (tree,edge,nol):
     v_i , v_j = edge[0] , edge[1]
     tree_directed = nx.dfs_tree(tree,v_i)
