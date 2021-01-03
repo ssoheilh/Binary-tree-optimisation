@@ -1,11 +1,11 @@
 from Functions import *
 
 
-time_in_seconds = 9 * 60 * 60  
+time_in_seconds = 3 * 24 * 60 * 60  
 seed = 1
 
 df=pd.read_pickle('S&P 500 time series.pkl')
-df = df.sample(30, random_state=seed , axis=1)
+df = df.sample(70, random_state=seed , axis=1)
 R=np.zeros(shape=(df.shape[0]-1,df.shape[1]))
 df_values=df.values
 
