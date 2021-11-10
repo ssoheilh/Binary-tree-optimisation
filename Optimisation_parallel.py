@@ -1,11 +1,15 @@
 from Functions import *
 
 
-time_in_seconds = 3 * 24 * 60 * 60  
+time_in_seconds = 2 * 24 * 60 * 60  
+sample_size = 50
 seed = 2
+starting_tree = 0
+continuation_time = 1 * 24 * 60 * 60
+
 
 df=pd.read_pickle('S&P 500 time series.pkl')
-df = df.sample(60, random_state=seed , axis=1)
+df = df.sample(sample_size, random_state=seed , axis=1)
 R=np.zeros(shape=(df.shape[0]-1,df.shape[1]))
 df_values=df.values
 
@@ -20,40 +24,56 @@ np.fill_diagonal(dis , 0)
 
 nol = df.shape[1]
 
-def ILS_seed(seed , time_in_seconds=time_in_seconds , nol=nol , df=df , dis=dis): 
+
+
+def ILS_seed(seed , time_in_seconds=time_in_seconds , nol=nol , df=df , dis=dis , starting_tree = starting_tree
+            , continuation_time = continuation_time): 
     
-    random.seed()
+    if not starting_tree:
+        random.seed()
 
-    tree = random_binary_tree(nol)
-    tree = nx.Graph(tree)
-    
-    file = open ('RSS_results/Sample%d_%dmin_seed%d.txt' %(nol, time_in_seconds//60  , seed ) , 'w')
-    file.close()
-    
+        tree = random_binary_tree(nol)
+        tree = nx.Graph(tree)
 
-    for i,j in tree.edges():
-        tree[i][j]['weight'] = find_edgeweight(tree,(i,j),nol,dis)
+        file = open ('RSS_results/Sample%d_%dmin_seed%d.txt' %(nol, time_in_seconds//60  , seed ) , 'w')
+        file.close()
 
 
+        for i,j in tree.edges():
+            tree[i][j]['weight'] = find_edgeweight(tree,(i,j),nol,dis)
 
-    rss = RSS(tree,nol,dis)
-    rss_best=rss
 
-    
-    tree_best = tree.copy()
 
-    tree_neg_NNI_best = nx.Graph()
-    rss_neg_NNI_best = 100000000000000000000
+        rss = RSS(tree,nol,dis)
+        rss_best=rss
 
-    tree_pos_best = nx.Graph()
-    rss_pos_best = 100000000000000000000
 
+        tree_best = tree.copy()
+
+        tree_neg_NNI_best = nx.Graph()
+        rss_neg_NNI_best = 100000000000000000000
+
+        tree_pos_best = nx.Graph()
+        rss_pos_best = 100000000000000000000
+        
+        time_passed = time_in_seconds
+
+    else:
+        tree = starting_tree
+        file = open ('RSS_results/Sample%d_%dmin_seed%d.txt' %(nol, time_in_seconds//60  , seed ) , 'a')
+        file.close()
+        rss = RSS(tree,nol,dis)
+        rss_best=rss
+        rss_neg_NNI_best = rss_pos_best = rss_best
+        tree_best = tree.copy()
+        tree_neg_NNI_best = tree_pos_best = tree_best
+        time_passed = continuation_time
 
 
     harmonic_number = lambda n: sum(Fraction(1, d) for d in range(1, n+1)) 
     local_min_stuck = float (2 * nol * harmonic_number( 2 * nol) ) #nol roughly equal to internal edges
 
-    time_passed = time_in_seconds
+#     time_passed = time_in_seconds
     t_end = time.time() + time_passed
     counter_jump = 0
     loop = 0 
@@ -137,7 +157,13 @@ def ILS_seed(seed , time_in_seconds=time_in_seconds , nol=nol , df=df , dis=dis)
 # breakpoint()
 number_of_pools=10
 pool = mp.Pool(number_of_pools)
-results_ILS= pool.map(ILS_seed, [i for i in number_of_pools*[seed]])
+if not starting_tree:
+    results_ILS= pool.map(ILS_seed, [i for i in number_of_pools*[seed]])
+else:
+    with open('Graphs/Sample%d_%dmin_seed%d.pkl' %(sample_size , time_in_seconds//60 , seed) , 'rb') as f:
+        trees = pickle.load(f)
+    results_ILS= pool.starmap(ILS_seed,
+                [(seed , time_in_seconds , nol , df , dis , tree , continuation_time ) for tree in trees])
 pool.close()
 
 
